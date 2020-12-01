@@ -18,12 +18,7 @@ logger.addHandler(ch)
 # Create the harvester
 h = Harvester(logger=logger)
 # the harvester can load dlls as well as cti files.
-h.add_cti_file(r'C:\Program Files\IMI Tech\Neptune\GenICam\bin\Win64_x64\genapi\generic\msvcp100.dll')
-h.add_cti_file(r'C:\Program Files\IMI Tech\Neptune\GenICam\bin\Win64_x64\genapi\generic\msvcr100.dll')
-h.add_cti_file(r'C:\Program Files\IMI Tech\Neptune\GenICam\bin\Win64_x64\genapi\generic\Xalan-C_MD_VC100_v1_10_1.dll')
-h.add_cti_file(r'C:\Program Files\IMI Tech\Neptune\GenICam\bin\Win64_x64\genapi\generic\XalanMessages_MD_VC100_v1_10_1.dll')
-h.add_cti_file(r'C:\Program Files\IMI Tech\Neptune\GenICam\bin\Win64_x64\genapi\generic\Xerces-C_MD_VC100_v2_7_1.dll')
-h.add_cti_file(r'C:\Program Files\IMI Tech\Neptune\GenICam\bin\Win64_x64\genapi\generic\XMLLoader_MD_VC100_v2_3.dll')
+h.add_cti_file(r'C:\Program Files\IMI Tech\Neptune\ActiveX\Lib\NeptuneTL.cti')
 h.update_device_info_list()
 print(h.device_info_list)
 
