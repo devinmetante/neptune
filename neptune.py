@@ -1,59 +1,257 @@
-from harvesters.core import Harvester
-import logging
-import matplotlib.pyplot as plt
+import pathlib
+from datetime import datetime
 
-import os
-print(os.getenv('HARVESTERS_XML_FILE_DIR'))
+import win32com.client as client
 
-# set up a logger for the harvester library.
-# this is not needed but can be useful for debugging your script
-logger = logging.getLogger('harvesters')
-ch = logging.StreamHandler()
-logger.setLevel(logging.DEBUG)
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
 
-# Create the harvester
-h = Harvester(logger=logger)
-# the harvester can load dlls as well as cti files.
-h.add_cti_file(r'C:\Program Files\IMI Tech\Neptune\ActiveX\Lib\NeptuneTL.cti')
-h.update_device_info_list()
-print(h.device_info_list)
+class COMBridge:
+    __program_id = ''
+    __cls_id = ''
+    obj = None
 
-# create an image acquirer
-ia = h.create_image_acquirer(list_index=0)
-# this is required for larger images (> 16 MiB) with Critical Link's producer.
-ia.num_buffers = 4
-ia.remote_device.node_map.PixelFormat.value = 'Mono8'
-# Uncomment to set the image ROI width, height. Otherwise will get full frame
-# ia.remote_device.node_map.Width.value, ia.remote_device.node_map.Height.value = 800, 600
+    def __init__(self, pid=__program_id):
+        self.obj = client.Dispatch(pid)
 
-print("Starting Acquistion")
 
-ia.start_image_acquisition()
+PROGID = 'Neptune.NeptuneCtrl.1'
+CLSID = '{50182A02-9665-4094-AA35-B1938D210DAC}'
+PARENT_PATH = pathlib.Path(__file__).parent
+IMAGE_PATH = PARENT_PATH / 'img'
+RES_PATH = PARENT_PATH / 'res'
 
-# just capture 1 frame
-for i in range(1):
-	with ia.fetch_buffer(timeout=4) as buffer:
-		payload = buffer.payload
-		component = payload.components[0]
-		width = component.width
-		height = component.height
-		data_format = component.data_format
-		print("Image details: {}w {}h {}".format(width, height, data_format))
-		# for monochrome 8 bit images
-		if int(component.num_components_per_pixel) == 1:
-			content = component.data.reshape(height, width)
-		else:
-			content = component.data.reshape(height, width, int(component.num_components_per_pixel))
-		if int(component.num_components_per_pixel) == 1:
-			plt.imshow(content, cmap='gray')
-		else:
-			plt.imshow(content)
-		plt.show()
 
-#
-ia.stop_image_acquisition()
-ia.destroy()
+class Neptune(COMBridge):
+    __prog_id = PROGID
+    __cls_id = CLSID
+    __cam = None
+    __cam_ind = None
+
+    def __init__(self):
+        super().__init__(pid=self.__prog_id)
+        self.__cam = self.obj
+        del self.obj
+
+    @staticmethod
+    def __prep_paths():
+        IMAGE_PATH.mkdir(parents=True, exist_ok=True)
+        RES_PATH.mkdir(parents=True, exist_ok=True)
+
+    def initialize_camera(self, cam_ind, pixel_format_ind):
+        # cam_ind from camera_list
+        # pixel_format_ind from pixel_format_list
+        self.camera = cam_ind
+        self.pixel_format = pixel_format_ind
+
+        _ = self.camera_type
+        if _ == 0:
+            self.__cam.GigeFrameRate = 30
+        elif _ == 1:
+            self.__cam.FireWireFrameRate = 2
+        elif _ == 2:
+            self.__cam.USBFrameRate = 30
+
+    @property
+    def camera_list(self):
+        return self.__cam.GetCameraList()
+
+    @property
+    def pixel_format_list(self):
+        return self.__cam.GetPixelFormatList()
+
+    @property
+    def avi_codec_list(self):
+        return self.__cam.GetAVICodecList()
+
+    @property
+    def camera_info(self):
+        # only for GigE camera
+        # Select/Set the camera first using obj.camera setter to get the camera info of selected camera
+        _ = self.__cam.GetCameraInfo(self.camera)
+        return {'model': _[0],
+                'vendor': _[1],
+                'sn': _[2],
+                'user_id': _[3],
+                'gateway_address': _[4],
+                'ip_address': _[5],
+                'mac_address': _[6],
+                'subnet_mask': _[7],
+                'configuration_mode': _[8],  # 0-Persistent, 1-DHCP
+                'nic_ip_address': _[9],
+                'nic_subnet_mask': _[10]}
+
+    @property
+    def camera_type(self):
+        return self.__cam.GetCameraType()
+
+    @property
+    def camera(self):
+        return self.__cam.Camera
+
+    @camera.setter
+    def camera(self, val):
+        if isinstance(val, int):
+            self.__cam.Camera = val
+        elif isinstance(val, str):
+            self.__cam.CameraUserID = val
+        else:
+            raise Exception('Invalid argument type. Expected int or str but received {}.'.format(type(val)))
+
+    @property
+    def pixel_format(self):
+        return self.__cam.PixelFormat
+
+    @pixel_format.setter
+    def pixel_format(self, ind):
+        self.__cam.PixelFormat = ind
+
+    @property
+    def acquisition(self):
+        return self.__cam.Acquisition
+
+    @acquisition.setter
+    def acquisition(self, val):
+        assert val in (0, 1)
+        self.__cam.Acquisition = val
+
+    @property
+    def acquisition_mode(self):
+        return self.__cam.AcquisitionMode
+
+    @acquisition_mode.setter
+    def acquisition_mode(self, str_mode):
+        assert str_mode in ('SingleFrame', 'MultiFrame', 'Continuous')
+        self.__cam.AcquisitionMode = str_mode
+
+    @property
+    def access_mode(self):
+        return self.__cam.AccessMode
+
+    @access_mode.setter
+    def access_mode(self, val):
+        # val: 0-Exclusive, 1-Control, 2-Monitor
+        assert val in (0, 1, 2)
+        self.__cam.AccessMode = val
+
+        # for GigE Camera only
+        if self.camera_type == 1:
+            self.__stream_mode = 0 if not val else 1
+
+    @property
+    def event_channel(self):
+        return self.__cam.EventChannel
+
+    @event_channel.setter
+    def event_channel(self, val):
+        assert val in (0, 1)
+        self.__cam.EventChannel = val
+
+    @property
+    def __stream_mode(self):
+        return self.__cam.StreamMode
+
+    @__stream_mode.setter
+    def __stream_mode(self, val):
+        assert val in (0, 1)
+        self.__cam.StreamMode = val
+
+    @property
+    def __data_bit(self):
+        return self.__cam.DataBit
+
+    @__data_bit.setter
+    def __data_bit(self, val):
+        self.__cam.DataBit = val
+
+    @property
+    def __bit_per_pixel(self):
+        return self.__cam.GetBitPerPixel()
+
+    @property
+    def __sizeX(self):
+        return self.__cam.SizeX
+
+    @__sizeX.setter
+    def __sizeX(self, val):
+        self.__cam.SizeX = val
+
+    @property
+    def __sizeY(self):
+        return self.__cam.SizeY
+
+    @__sizeY.setter
+    def __sizeY(self, val):
+        self.__cam.SizeY = val
+
+    @property
+    def raw_data(self):
+        return self.__cam.GetRawData()
+
+    @property
+    def rgb_data(self):
+        return self.__cam.GetRGBData()
+
+    @property
+    def image_time_stamp(self):
+        return self.__cam.GetTimeStamp()
+
+    def save_camera_parameter(self, target_file='Param.txt'):
+        path = RES_PATH / target_file
+        self.__cam.SaveCameraParameter(str(path))
+
+    def load_camera_parameter(self, source_file='Param.txt'):
+        path = RES_PATH / source_file
+        self.__cam.LoadCameraParameter(str(path))
+
+    @property
+    def avi_codec(self):
+        return self.__cam.AVICodec
+
+    @avi_codec.setter
+    def avi_codec(self, val):
+        self.__cam.AVICodec = val
+
+    def save_image(self, img_type):
+        assert img_type in ('raw', 'rgb', 'bmp', 'jpg', 'tif')
+        self.__cam.Grab()
+        datetime_stamp = datetime.now()
+        filename = '{}_{:0>2}_{:0>2}_{:0>2}_{:0>2}_{:0>2}_{:0>3}.{}'.format(datetime_stamp.year, datetime_stamp.month,
+                                                                            datetime_stamp.day, datetime_stamp.hour,
+                                                                            datetime_stamp.minute,
+                                                                            datetime_stamp.second,
+                                                                            int(datetime_stamp.microsecond / 1000),
+                                                                            img_type)
+        file_pathname = pathlib.Path(IMAGE_PATH) / filename
+        if img_type == 'raw':
+            _ = self.__cam.GetRawData(0)
+            bytes_per_pixel = self.__bit_per_pixel / 8
+            assert file_pathname.write_bytes(_) == (bytes_per_pixel * self.__sizeX * self.__sizeY)
+        elif img_type == 'rgb':
+            _ = self.__cam.GetRGBData(0)
+            assert file_pathname.write_bytes(_) == (3 * self.__sizeX * self.__sizeY)
+        else:
+            self.__cam.SaveImage(file_pathname, 100)
+
+    @property
+    def grab_time_out(self):
+        return self.__cam.GrabTimeOut
+
+    @grab_time_out.setter
+    def grab_time_out(self, val):
+        self.__cam.GrabTimeOut = val
+
+    @property
+    def error(self):
+        return self.__cam.GetError()
+
+
+if __name__ == '__main__':
+    cam = Neptune()
+    print('...getting camera list')
+    cam_list = cam.camera_list()
+    print('\nCAM LIST\n{}'.format(cam_list))
+    assert len(cam_list) > 0
+    print('...selecting first camera')
+    cam.camera = 0
+    cam_type = {0: 'GigE', 1: '1394', 2: 'USB3'}
+    print('CAMERA TYPE:\t{}'.format(cam_type[cam.camera_type]))
+    print('CAMERA INFO:\t{}'.format(cam.camera_info))
