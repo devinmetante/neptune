@@ -54,6 +54,12 @@ class Neptune(COMBridge):
         elif _ == 2:
             self.__cam.USBFrameRate = 30
 
+        cam.auto_white_balance = 'Off'
+        cam.bayer_convert = 1
+
+        # Settings below may be different for other cameras depending on calibration procedure
+        cam.exposure_time_string = '63 ms'
+
     @property
     def camera_list(self):
         return self.__cam.GetCameraList()
@@ -230,10 +236,8 @@ class Neptune(COMBridge):
         assert img_type in ('raw', 'rgb', 'bmp', 'jpg', 'tiff')
 
         self.acquisition = 1
-        try:
-            self.__cam.Grab()
-        except Exception as e:
-            print('\nGrab Error:\n{}\n'.format(e.args))
+
+        self.__cam.Grab()
 
         datetime_stamp = datetime.now()
         filename = '{}_{:0>2}_{:0>2}_{:0>2}_{:0>2}_{:0>2}_{:0>3}.{}'.format(datetime_stamp.year, datetime_stamp.month,
@@ -326,11 +330,38 @@ class Neptune(COMBridge):
         assert val in (0, 1)
         self.__cam.Trigger = val
 
+    @property
+    def iris(self):
+        return self.__cam.Iris
+
+    @iris.setter
+    def iris(self, val):
+        assert isinstance(val, int)
+        self.__cam.Iris = val
+
+    @property
+    def pan(self):
+        return self.__cam.Pan
+
+    @pan.setter
+    def pan(self, val):
+        assert isinstance(val, int)
+        self.__cam.Pan = val
+
+    @property
+    def tilt(self):
+        return self.__cam.Tilt
+
+    @tilt.setter
+    def tilt(self, val):
+        assert isinstance(val, int)
+        self.__cam.Tilt = val
+
 
 if __name__ == '__main__':
     cam = Neptune()
     print('...getting camera list')
-    cam_list = cam.camera_list()
+    cam_list = cam.camera_list
     print('\nCAM LIST\n{}'.format(cam_list))
     assert len(cam_list) > 0
     print('...selecting first camera and second pixel format option')
@@ -350,13 +381,14 @@ if __name__ == '__main__':
     print('BAYER CONVERT:\t{}'.format(cam.bayer_convert))
     print('Trigger State: \t{}'.format(cam.trigger))
     print('Grab Timeout: \t{}'.format(cam.grab_time_out))
+    print('Iris: \t{}'.format(cam.iris))
+    print('Pan: \t{}'.format(cam.pan))
+    print('Tilt: \t{}'.format(cam.tilt))
+
     print('...updating settings')
-    cam.auto_white_balance = 'Off'
-    # cam.exposure_time_string = '48.6 ms'
-    cam.bayer_convert = 1
     print('\n...acquiring images...\n')
+    print('SAVED\t{}'.format(cam.save_image('raw')))
+    print('SAVED\t{}'.format(cam.save_image('rgb')))
     print('SAVED\t{}'.format(cam.save_image('jpg')))
     print('SAVED\t{}'.format(cam.save_image('bmp')))
     print('SAVED\t{}'.format(cam.save_image('tiff')))
-    print('SAVED\t{}'.format(cam.save_image('raw')))
-    print('SAVED\t{}'.format(cam.save_image('rgb')))
