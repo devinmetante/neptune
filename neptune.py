@@ -348,6 +348,7 @@ if __name__ == '__main__':
     print('BAYER LAYOUT:\t{}'.format(cam.bayer_layout))
     print('BAYER CONVERT:\t{}'.format(cam.bayer_convert))
     print('Trigger State: \t{}'.format(cam.trigger))
+    print('Grab Timeout: \t{}'.format(cam.grab_time_out))
     print('...updating settings')
     cam.auto_white_balance = 'Off'
     # cam.exposure_time_string = '48.6 ms'
