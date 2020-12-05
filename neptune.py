@@ -1,4 +1,5 @@
 import pathlib
+import shutil
 from datetime import datetime
 
 import win32com.client as client
@@ -206,16 +207,16 @@ class Neptune(COMBridge):
         # camera parameter file will be saved in RES_PATH directory
         path = RES_PATH / target_file
         self.__cam.SaveCameraParameter(target_file)
-        pathlib.Path(target_file).replace(path)
+        shutil.move(target_file, path)
 
     def load_camera_parameter(self, source_file='Param.txt'):
         # source_file should be initially saved in RES_PATH directory
         path = RES_PATH / source_file
-        path.replace(source_file)
+        shutil.copy(path, source_file)
         try:
             self.__cam.LoadCameraParameter(source_file)
         finally:
-            pathlib.Path(source_file).replace(path)
+            pathlib.Path(source_file).unlink()
 
     @property
     def avi_codec(self):
@@ -226,13 +227,13 @@ class Neptune(COMBridge):
         self.__cam.AVICodec = val
 
     def save_image(self, img_type):
-        assert img_type in ('raw', 'rgb', 'bmp', 'jpg', 'tif')
+        assert img_type in ('raw', 'rgb', 'bmp', 'jpg', 'tiff')
 
         self.acquisition = 1
         try:
             self.__cam.Grab()
         except Exception as e:
-            print('\nGrab Error:\n{}\n{}\n'.format(e, e.args))
+            print('\nGrab Error:\n{}\n'.format(e.args))
 
         datetime_stamp = datetime.now()
         filename = '{}_{:0>2}_{:0>2}_{:0>2}_{:0>2}_{:0>2}_{:0>3}.{}'.format(datetime_stamp.year, datetime_stamp.month,
@@ -356,6 +357,6 @@ if __name__ == '__main__':
     print('\n...acquiring images...\n')
     print('SAVED\t{}'.format(cam.save_image('jpg')))
     print('SAVED\t{}'.format(cam.save_image('bmp')))
-    print('SAVED\t{}'.format(cam.save_image('tif')))
+    print('SAVED\t{}'.format(cam.save_image('tiff')))
     print('SAVED\t{}'.format(cam.save_image('raw')))
     print('SAVED\t{}'.format(cam.save_image('rgb')))
