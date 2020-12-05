@@ -39,6 +39,9 @@ class Neptune(COMBridge):
     def initialize_camera(self, cam_ind, pixel_format_ind):
         # cam_ind from camera_list
         # pixel_format_ind from pixel_format_list
+
+        self.__prep_paths()
+
         self.camera = cam_ind
         self.pixel_format = pixel_format_ind
 
@@ -224,7 +227,7 @@ class Neptune(COMBridge):
 
     def save_image(self, img_type):
         assert img_type in ('raw', 'rgb', 'bmp', 'jpg', 'tif')
-        # self.acquisition = 1
+        self.acquisition = 1
         self.__cam.Grab()
         datetime_stamp = datetime.now()
         filename = '{}_{:0>2}_{:0>2}_{:0>2}_{:0>2}_{:0>2}_{:0>3}.{}'.format(datetime_stamp.year, datetime_stamp.month,
@@ -258,6 +261,52 @@ class Neptune(COMBridge):
     def error(self):
         return self.__cam.GetError()
 
+    @property
+    def auto_white_balance(self):
+        return self.__cam.BalanceWhiteAuto
+
+    @auto_white_balance.setter
+    def auto_white_balance(self, val):
+        assert val in ('Off', 'Once', 'Continuous')
+
+    @property
+    def exposure_time_string(self):
+        return self.__cam.GetExposureTimeString()
+
+    @exposure_time_string.setter
+    def exposure_time_string(self, val):
+        self.__cam.SetExposureTimeString(val)
+
+    @property
+    def bayer_conversion(self):
+        return self.__cam.BayerConversion
+
+    @bayer_conversion.setter
+    def bayer_conversion(self, val):
+        # 1:MMX Bilinear, 2:MMX High-Quality 3: Nearest
+        assert val in (1, 2, 3)
+        self.__cam.BayerConversion = val
+
+    @property
+    def bayer_convert(self):
+        return self.__cam.BayerConvert
+
+    @bayer_convert.setter
+    def bayer_convert(self, val):
+        # 0: Disable, 1: Enable
+        assert val in (0, 1)
+        self.__cam.BayerConvert = val
+
+    @property
+    def bayer_layout(self):
+        return self.__cam.BayerLayout
+
+    @bayer_layout.setter
+    def bayer_layout(self, val):
+        # 0: GB/RG  1: BG/GR    2: RG/GB    3: GR/BG
+        assert val in (0, 1, 2, 3)
+        self.__cam.BayerLayout = val
+
 
 if __name__ == '__main__':
     cam = Neptune()
@@ -265,8 +314,8 @@ if __name__ == '__main__':
     cam_list = cam.camera_list()
     print('\nCAM LIST\n{}'.format(cam_list))
     assert len(cam_list) > 0
-    print('...selecting first camera')
-    cam.camera = 0
+    print('...selecting first camera and second pixel format option')
+    cam.initialize_camera(0, 1)
     cam_type = {0: 'GigE', 1: '1394', 2: 'USB3'}
     print('CAMERA TYPE:\t{}'.format(cam_type[cam.camera_type]))
     print('CAMERA INFO:\t{}'.format(cam.camera_info))
@@ -276,6 +325,14 @@ if __name__ == '__main__':
     print('\nPIXEL FORMAT: \t{}'.format(cam.pixel_format))
     print('ACQUISITION:\t{}'.format(cam.acquisition))
     print('ACQUISITION MODE:\t{}'.format(cam.access_mode))
+    print('BalanceWhiteAuto:\t{}'.format(cam.auto_white_balance))
+    print('BAYER CONVERSION:\t{}'.format(cam.bayer_conversion))
+    print('BAYER LAYOUT:\t{}'.format(cam.bayer_layout))
+    print('BAYER CONVERT:\t{}'.format(cam.bayer_convert))
+    print('...updating settings')
+    cam.auto_white_balance = 'Off'
+    # cam.exposure_time_string = '48.6 ms'
+    cam.bayer_convert = 1
     print('\n...acquiring images...\n')
     print('SAVED\t{}'.format(cam.save_image('jpg')))
     print('SAVED\t{}'.format(cam.save_image('bmp')))
