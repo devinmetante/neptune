@@ -227,8 +227,13 @@ class Neptune(COMBridge):
 
     def save_image(self, img_type):
         assert img_type in ('raw', 'rgb', 'bmp', 'jpg', 'tif')
+
         self.acquisition = 1
-        self.__cam.Grab()
+        try:
+            self.__cam.Grab()
+        except Exception as e:
+            print('\nGrab Error:\n{}\n{}\n'.format(e, e.args))
+
         datetime_stamp = datetime.now()
         filename = '{}_{:0>2}_{:0>2}_{:0>2}_{:0>2}_{:0>2}_{:0>3}.{}'.format(datetime_stamp.year, datetime_stamp.month,
                                                                             datetime_stamp.day, datetime_stamp.hour,
@@ -237,15 +242,18 @@ class Neptune(COMBridge):
                                                                             int(datetime_stamp.microsecond / 1000),
                                                                             img_type)
         file_pathname = pathlib.Path(IMAGE_PATH) / filename
-        if img_type == 'raw':
-            _ = self.__cam.GetRawData(0)
-            bytes_per_pixel = self.__bit_per_pixel / 8
-            assert file_pathname.write_bytes(_) == (bytes_per_pixel * self.__sizeX * self.__sizeY)
-        elif img_type == 'rgb':
-            _ = self.__cam.GetRGBData(0)
-            assert file_pathname.write_bytes(_) == (3 * self.__sizeX * self.__sizeY)
-        else:
-            self.__cam.SaveImage(file_pathname, 100)
+        try:
+            if img_type == 'raw':
+                _ = self.__cam.GetRawData(0)
+                bytes_per_pixel = self.__bit_per_pixel / 8
+                assert file_pathname.write_bytes(_) == (bytes_per_pixel * self.__sizeX * self.__sizeY)
+            elif img_type == 'rgb':
+                _ = self.__cam.GetRGBData(0)
+                assert file_pathname.write_bytes(_) == (3 * self.__sizeX * self.__sizeY)
+            else:
+                self.__cam.SaveImage(file_pathname, 100)
+        finally:
+            self.acquisition = 0
 
         return str(file_pathname)
 
@@ -307,6 +315,16 @@ class Neptune(COMBridge):
         assert val in (0, 1, 2, 3)
         self.__cam.BayerLayout = val
 
+    @property
+    def trigger(self):
+        return self.__cam.Trigger
+
+    @trigger.setter
+    def trigger(self, val):
+        # 0: disable trigger control, 1: enable trigger control
+        assert val in (0, 1)
+        self.__cam.Trigger = val
+
 
 if __name__ == '__main__':
     cam = Neptune()
@@ -329,6 +347,7 @@ if __name__ == '__main__':
     print('BAYER CONVERSION:\t{}'.format(cam.bayer_conversion))
     print('BAYER LAYOUT:\t{}'.format(cam.bayer_layout))
     print('BAYER CONVERT:\t{}'.format(cam.bayer_convert))
+    print('Trigger State: \t{}'.format(cam.trigger))
     print('...updating settings')
     cam.auto_white_balance = 'Off'
     # cam.exposure_time_string = '48.6 ms'
